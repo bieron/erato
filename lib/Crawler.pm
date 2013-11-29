@@ -17,30 +17,84 @@ has 'parser' => (is => 'rw', isa => 'Ref');
 
 my%fnames;
 
+sub dow {#class helper
+   my$dow = lc substr(shift,0,3);
+   $dow = 'wt' if $dow eq 'wto';
+   $dow = 'pt' if $dow =~ /pi./;
+   $dow = 'sb' if $dow eq 'sob';
+   $dow = 'nd' if $dow eq 'nie';
+   $dow;
+}
+sub sortKeys {
+#   my$self = shift;
+   my%data = %{ shift() };
+   my@ks = sort {
+      $data{$a}->{dates}[0][0] cmp $data{$b}->{dates}[0][0] 
+   } keys %data;
+   @ks;
+#   for(@ks) { print $data{$_}->{dates}[0][0] }
+}
+
+sub limit {
+   my%d = @_;
+   my%data = %{$d{data}};
+   delete $d{data};
+   my@limits = @{ $d{(keys %d)[0]} };
+   if ($d{and}) {
+      for my$k (keys %data) {
+         for my$t ( @{$data{$k}->{dates}} ) {
+            for my$l (@limits) {
+               print $k, @$t, $l;
+            }
+         }
+      }
+   } elsif ($d{or}) {
+   
+   }
+   print @limits;
+}
+
 sub crawl {
    my$self = shift;
    warn 'wtf' unless $self->html;
    my($html,$row) = ($self->html, $self->row);
    my$fun = $self->parser;
    my@parsed = $fun->($self);
-   my@shows = (); $#shows = $#parsed;
-   for(my$i=0; $i<$#parsed; ++$i) {
-      $shows[$i] = new Show( $parsed[$i] );#passes hashref
+   my%data;
+   for my$row (@parsed) {
+#TODO tidy title, dow, hour. tidy other values if first time
+# then send to Show constructor
+      my%row = %{$row};
+      my$key = $row{title};
+      $key = ucfirst lc $key;
+      $row{dow} = dow($row{dow});
+#      $row{hour} =~ s/<[^>]+>/,/g;
+#      $row{hour} =~ s/,+\s*$//;
+#      $row{hour} =~ s/,+/, /g;
+      
+      my@when = ($row{date},$row{dow},$row{hour});
+      if($data{$key}) {
+         push @{$data{key}->{dates}}, \@when;
+         next;
+      }
+      delete $row{title}; delete $row{date}; delete $row{hour}; delete $row{dow};
+      $row{dates} = [ \@when ];
+      $data{$key} = \%row;
    }
-=begin      
-      for my$a (@parsed) {
+   my@shows;
+   while( my($a,$b) = each %data) {
+      $b->{title} = $a;
+      push @shows, Show->new($b);
+#      print $b->{title}, keys %{$b},"\n";
+   }
+   for (@shows) {
+   }
+#   warn Data::Dumper->Dump( [%data] );
+   my@ks = sortKeys( \%data );
+#   print scalar keys %data;
+   limit( data => \%data, and => [2]);
+#   print scalar keys %data;
 
-      warn Data::Dumper->Dump( [\$a], ['a'] );
-   }
-   while($html =~ m/$row/gx) {
-      print $1,$2,$3,$4,$5;
-   my@matches = $html =~ m/$row/gx;
-   for my$a (@matches) {
-      print 'row';
-      print $a;
-      warn Data::Dumper->Dump([\$a], ['a']);
-   }
-=cut
 }
 
 sub correctUrl {
@@ -118,12 +172,16 @@ sub fetch {
       print 'yo mister white';
    }
    my$html = $rsvp->content;
+   ($html) = $html =~ /(<body.*body>)/s;
+   $html =~ s/<script.*?script>//sg;
    $html =~ s/\n//g;
+   $html =~ s/&nbsp;/ /g;
+   $html =~ s/&ndash;/-/g;
+   $html =~ s/&oacute;/ó/g;
+   $html =~ s/&quot;/"/g;
    $html =~ s/\s+/ /g;
+#   print length $html;
 
-#   print $self->address;
-#   print $fn;
-   
    $self->html( $html );
    open $f, '>', $fn;
    print $f $html;
@@ -131,6 +189,7 @@ sub fetch {
 
    return $code;
 }
+
 sub addGet {
    my$self = shift;
 #   my%nv = @_;

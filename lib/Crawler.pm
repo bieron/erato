@@ -1,18 +1,47 @@
 package Crawler;
 use Moose;
 use LWP;
+use Data::Dumper;
 #use HTTP::Cookies;
 
 has 'address' => (is => 'rw', isa => 'Str', trigger => \&correctUrl);
 has 'get' => (is => 'rw', isa => 'HashRef', default => sub {{}});
 has 'post' => (is => 'rw', isa => 'HashRef', default => sub {{}});
 has 'url' => (is => 'rw', isa => 'Str');
+      has 'row' => (is => 'rw', isa => 'Str');
 
 
 has 'html' => (is => 'rw', isa => 'Str');
 has 'cache' => (is => 'ro', isa => 'Str', default => 'cache');
+has 'parser' => (is => 'rw', isa => 'Ref');
 
 my%fnames;
+
+sub crawl {
+   my$self = shift;
+   warn 'wtf' unless $self->html;
+   my($html,$row) = ($self->html, $self->row);
+   my$fun = $self->parser;
+   my@parsed = $fun->($self);
+   my@shows = (); $#shows = $#parsed;
+   for(my$i=0; $i<$#parsed; ++$i) {
+      $shows[$i] = new Show( $parsed[$i] );#passes hashref
+   }
+=begin      
+      for my$a (@parsed) {
+
+      warn Data::Dumper->Dump( [\$a], ['a'] );
+   }
+   while($html =~ m/$row/gx) {
+      print $1,$2,$3,$4,$5;
+   my@matches = $html =~ m/$row/gx;
+   for my$a (@matches) {
+      print 'row';
+      print $a;
+      warn Data::Dumper->Dump([\$a], ['a']);
+   }
+=cut
+}
 
 sub correctUrl {
    my($self,$u) = @_;
@@ -88,12 +117,16 @@ sub fetch {
    if($code < 200 || $code  > 299) {
       print 'yo mister white';
    }
-   $self->html( $rsvp->content);
+   my$html = $rsvp->content;
+   $html =~ s/\n//g;
+   $html =~ s/\s+/ /g;
+
 #   print $self->address;
 #   print $fn;
    
+   $self->html( $html );
    open $f, '>', $fn;
-   print $f $self->html;
+   print $f $html;
    close $f;
 
    return $code;

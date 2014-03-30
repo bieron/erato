@@ -8,9 +8,7 @@ has 'address' => (is => 'rw', isa => 'Str', trigger => \&correctUrl);
 has 'get' => (is => 'rw', isa => 'HashRef', default => sub {{}});
 has 'post' => (is => 'rw', isa => 'HashRef', default => sub {{}});
 has 'url' => (is => 'rw', isa => 'Str');
-      has 'row' => (is => 'rw', isa => 'Str');
-
-
+has 'row' => (is => 'rw', isa => 'Str');
 has 'html' => (is => 'rw', isa => 'Str');
 has 'cache' => (is => 'ro', isa => 'Str', default => 'cache');
 has 'parser' => (is => 'rw', isa => 'Ref');
@@ -60,13 +58,16 @@ sub crawl {
    my($html,$row) = ($self->html, $self->row);
    my$fun = $self->parser;
    my@parsed = $fun->($self);
+#   warn Data::Dumper->Dump( [@parsed] );
+#   exit;
    my%data;
    for my$row (@parsed) {
 #TODO tidy title, dow, hour. tidy other values if first time
 # then send to Show constructor
       my%row = %{$row};
-      my$key = $row{title};
-      $key = ucfirst lc $key;
+      #my$key = $row{title};
+      my$key = $row{url};
+#      $key = ucfirst lc $key;
       $row{dow} = dow($row{dow});
 #      $row{hour} =~ s/<[^>]+>/,/g;
 #      $row{hour} =~ s/,+\s*$//;
@@ -74,26 +75,29 @@ sub crawl {
       
       my@when = ($row{date},$row{dow},$row{hour});
       if($data{$key}) {
-         push @{$data{key}->{dates}}, \@when;
+         push @{$data{$key}->{dates}}, \@when;
          next;
       }
-      delete $row{title}; delete $row{date}; delete $row{hour}; delete $row{dow};
+#      delete $row{title}; delete $row{date}; delete $row{hour}; delete $row{dow};
+      delete $row{date}; delete $row{hour}; delete $row{dow};
       $row{dates} = [ \@when ];
       $data{$key} = \%row;
    }
    my@shows;
    while( my($a,$b) = each %data) {
-      $b->{title} = $a;
+#      $b->{title} = $a;
+#      $b->{url} = $a;
       push @shows, Show->new($b);
 #      print $b->{title}, keys %{$b},"\n";
    }
    for (@shows) {
    }
-#   warn Data::Dumper->Dump( [%data] );
+   #warn Data::Dumper->Dump( [%data] );
    my@ks = sortKeys( \%data );
-#   print scalar keys %data;
+   print scalar keys %data;
+#   print %{$data{key}};
    limit( data => \%data, and => [2]);
-#   print scalar keys %data;
+   print scalar keys %data;
 
 }
 
@@ -169,7 +173,7 @@ sub fetch {
    $rsvp = $ua->request($rsvp);
    my$code = $rsvp->code;
    if($code < 200 || $code  > 299) {
-      print 'yo mister white';
+      print 'http response ', $code;
    }
    my$html = $rsvp->content;
    ($html) = $html =~ /(<body.*body>)/s;

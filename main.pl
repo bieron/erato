@@ -1,9 +1,9 @@
 #!/usr/bin/perl -w
+use strict;
 
 local $\ = "\n";
 local $, = ', ';
 
-use strict;
 use lib 'lib';
 use utf8;
 binmode STDOUT, ':utf8';
@@ -19,6 +19,7 @@ $y += 1900;
 
 my$url = 'www.filharmonia.krakow.pl/Repertuar/Kalendarium/?events=process&date=month&'
    .'month='.$m.'&year='.$y;
+
 my$parser = sub {
    my$self = shift;
    my$html = $self->html;

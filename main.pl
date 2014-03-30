@@ -25,7 +25,7 @@ my$parser = sub {
    my$html = $self->html;
    my@parsed = ();
    my$row = '';
-   while( $html =~ m@<tr> .*? h1 .*? 
+   while( $html =~ m@<tr> .*? h1 .*?
    href="([^"]+)"> ([^<]+) </a> .*? </h1>    #url, title
    (.*?) </td .*?                            #description
    dataday"> ([^<]+) .*?                     #date_dow
@@ -42,8 +42,13 @@ my$parser = sub {
    }
    @parsed;
 };
-my$c = new Crawler(address => $url, parser => $parser);
+my$c = new Crawler;
+$c->load(what => 'slowacki_duza');
+#print length($c->html);
+print ($c->html);
+$c->view(format => 'html');
+#address => $url, parser => $parser);
 #my$c = new Crawler(address => $url, row => '.*?');
-$c->fetch;
-$c->crawl;
+#$c->fetch;
+#$c->crawl;
 #print $c->html;

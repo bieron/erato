@@ -14,6 +14,8 @@ has 'cache' => (is => 'ro', isa => 'Str', default => 'cache');
 has 'parser' => (is => 'rw', isa => 'Ref');
 
 my%fnames;
+my$ua = LWP::UserAgent->new;
+$ua->agent('Mozilla/8.0');
 
 sub dow {#class helper
    my$dow = lc substr(shift,0,3);
@@ -23,11 +25,29 @@ sub dow {#class helper
    $dow = 'nd' if $dow eq 'nie';
    $dow;
 }
+
+sub recent {#class function
+   time - shift() < 3600;#okres waznosci 1h
+}
+sub getUrl {
+	my%a = @_;
+	print %a;
+	my%url_of = (
+		slowacki_duza => 		'http://slowacki.krakow.pl/pl/repertuar/duza_scena/_get/month/!m/year/!y',
+		slowacki_miniatura => 'http://slowacki.krakow.pl/pl/repertuar/miniatura_scena/_get/month/!m/year/!y',
+		filharmonia => 'www.filharmonia.krakow.pl/Repertuar/Kalendarium/?events=process&date=month&month=!m&year=!y',
+		opera => 'opera'
+	);
+	my$u =  $url_of{ $a{what} };
+	$u =~ s/!m/$a{month}/;
+	$u =~ s/!y/$a{year}/;
+	return $u;
+}
 sub sortKeys {
 #   my$self = shift;
    my%data = %{ shift() };
    my@ks = sort {
-      $data{$a}->{dates}[0][0] cmp $data{$b}->{dates}[0][0] 
+      $data{$a}->{dates}[0][0] cmp $data{$b}->{dates}[0][0]
    } keys %data;
    @ks;
 #   for(@ks) { print $data{$_}->{dates}[0][0] }
@@ -47,11 +67,72 @@ sub limit {
          }
       }
    } elsif ($d{or}) {
-   
+
    }
    print @limits;
 }
 
+sub load {
+   my$self = shift;
+	local $,=":";
+	my%a = @_;
+	$a{month} ||= (localtime)[4]%12+1;
+	$a{year}  ||= (localtime)[5]+1900;
+#	$self->url( getUrl( %a ) );
+	$self->address( getUrl( %a ) );
+
+#print $self->url;
+	my$fn = $self->getName;
+
+	goto NOCACHE;
+	open my$f, '<', $fn or goto NOCACHE;
+	my$mt = (stat($f))[10];
+	goto NOCACHE if not recent $mt;
+	{  local $/; $self->html( <$f> ) }
+	close $f;
+	return 666;
+
+	NOCACHE:
+	my$rsvp;
+
+	if( %{$self->post} ) {
+		$rsvp = HTTP::Request->new(POST => $self->address);
+		$rsvp->content( querystring($self->post) );
+	} else {
+		$rsvp = HTTP::Request->new(GET => $self->address);
+	}
+	$rsvp = $ua->request($rsvp);
+	my$code = $rsvp->code;
+	if($code < 200 || $code  > 299) {
+		print 'http response ', $code;
+	}
+	#print $rsvp->content;
+#	$self->html( $rsvp->decoded_content );
+	$self->prepare( $rsvp->decoded_content );
+#	$self->prepare;
+
+	open $f, '>', $fn;
+	print $f $self->html;
+	close $f;
+
+	return $code;
+}
+sub prepare {
+   my($self,$html) = @_;
+	my($body) = $html =~ m/(<body.*body>)/s;
+	$body =~ s/<script.*?script>//sg;
+	$body =~ s/\n//g;
+	$body =~ s/&nbsp;/ /g;
+	$body =~ s/&ndash;/-/g;
+	$body =~ s/&oacute;/ó/g;
+	$body =~ s/&quot;/"/g;
+	$body =~ s/\s+/ /g;
+	my($title) = ($html =~ m/(<title.*?title>)/);
+	$self->html( '<html><head>'.$title.'</head>'.$body.'</html>' );
+}
+sub view {
+	print 'view'
+	}
 sub crawl {
    my$self = shift;
    warn 'wtf' unless $self->html;
@@ -72,7 +153,7 @@ sub crawl {
 #      $row{hour} =~ s/<[^>]+>/,/g;
 #      $row{hour} =~ s/,+\s*$//;
 #      $row{hour} =~ s/,+/, /g;
-      
+
       my@when = ($row{date},$row{dow},$row{hour});
       if($data{$key}) {
          push @{$data{$key}->{dates}}, \@when;
@@ -109,9 +190,6 @@ sub correctUrl {
 #   $self->url( $self->address );
 }
 
-sub recent {#class function
-   time - shift() < 3600;#okres waznosci 1h
-}
 
 sub BUILD {
    my$self = shift;
@@ -120,7 +198,8 @@ sub BUILD {
 
 sub getName {
    my$self = shift;
-   my$u = $self->url;
+#my$u = $self->url;
+   my$u = $self->address;
    return $fnames{$u} if($fnames{$u});
    my$fn = $u;
    $fn =~ s@[:/]@_@g;
@@ -136,8 +215,6 @@ sub querystring {#class function
    $qs;
 }
 
-my$ua = LWP::UserAgent->new;
-$ua->agent('Mozilla/8.0');
 
 before 'fetch' => sub {
    my($self,$a) = @_;
@@ -163,7 +240,7 @@ sub fetch {
 
    NOCACHE:
    my$rsvp;
-  
+
    if( %{$self->post} ) {
       $rsvp = HTTP::Request->new(POST => $self->address);
       $rsvp->content( querystring($self->post) );
@@ -244,4 +321,4 @@ before 'fetch' => sub {
 
 __PACKAGE__->meta->make_immutable;
 1;
-=cut   
+=cut

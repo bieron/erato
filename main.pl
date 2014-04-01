@@ -43,9 +43,11 @@ my$parser = sub {
    @parsed;
 };
 my$c = new Crawler;
-$c->load(what => 'slowacki_duza');
+$c->fetch(what => 'slowacki_duza');
+$c->fetch(what => 'slowacki_mala');
+#$c->read;
 #print length($c->html);
-print ($c->html);
+#print ($c->html);
 $c->view(format => 'html');
 #address => $url, parser => $parser);
 #my$c = new Crawler(address => $url, row => '.*?');

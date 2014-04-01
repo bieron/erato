@@ -2,29 +2,33 @@ package Crawler;
 use Moose;
 use LWP;
 use Data::Dumper;
-#use HTML::TableExtract;#load
-use Text::Table;       #load
 use Mojo::DOM;
 use DBI;
 use DBD::Pg;
-#use HTML::Parser;
 use HTTP::Cookies;
+use utf8;
+use open qw/:std :utf8/;
 
+my$DEBUG = 1;
+sub d($) { print STDERR shift }
+sub D { print Dumper(@_)}
 
-has 'address' => (is => 'rw', isa => 'Str', trigger => \&correctUrl);
-has 'get' => (is => 'rw', isa => 'HashRef', default => sub {{}});
-has 'post' => (is => 'rw', isa => 'HashRef', default => sub {{}});
+my@date = (localtime)[5,4];
+my$year = $date[0] + 1900;
+my$month = ($date[1]+2)%13;
+
+#has 'address' => (is => 'rw', isa => 'Str', trigger => \&correctUrl);
+#has 'get' => (is => 'rw', isa => 'HashRef', default => sub {{}});
+#has 'post' => (is => 'rw', isa => 'HashRef', default => sub {{}});
 has 'url' => (is => 'rw', isa => 'Str');
-has 'row' => (is => 'rw', isa => 'Str');
+#has 'row' => (is => 'rw', isa => 'Str');
 has 'html' => (is => 'rw', isa => 'Str');
 has 'cache' => (is => 'ro', isa => 'Str', default => 'cache');
 has 'parser' => (is => 'rw', isa => 'Ref');
 has 'shows' => (is => 'rw', isa=>'HashRef', default => sub {{}});
 has 'what' => (is => 'rw', isa=>'Str');
-
-my@date = (localtime)[5,4];
-my$year = $date[0] + 1900;
-my$month = ($date[1]+2)%13;
+#has 'month' => (is => 'rw', isa=>'Str');
+#has  'year' => (is => 'rw', isa=>'Number');
 
 my%fnames;
 my$ua = LWP::UserAgent->new;
@@ -33,79 +37,31 @@ $ua->cookie_jar( HTTP::Cookies->new(
 	file => 'erato.lwp', autosave => 1
 ));
 
-#sub dow {#class helper
-#   my$dow = lc substr(shift,0,3);
-#	$dow = 'wt' if $dow eq 'wto';
-#   $dow = 'pt' if $dow =~ /pi./;
-#	$dow = 'sb' if $dow eq 'sob';
-#	$dow = 'nd' if $dow eq 'nie';
-#   $dow;
-#}
-
 sub recent {#class function
    time - shift() < 3600;#okres waznosci 1h
 }
-#sub getUrl {
-#	my%a = @_;
-#	my%url_of = (
-#		slowacki_duza =>	'http://slowacki.krakow.pl/pl/repertuar/duza_scena/_get/month/!m/year/!y',
-#		slowacki_mala =>	'http://slowacki.krakow.pl/pl/repertuar/scena_miniatura/_get/month/!m/year/!y',
-#		filharmonia => 	'www.filharmonia.krakow.pl/Repertuar/Kalendarium/?events=process&date=month&month=!m&year=!y',
-#		opera =>				'opera'
-#	);
-#	my$u =  $url_of{ $a{what} };
-#	$u =~ s/!m/$a{month}/;
-#	$u =~ s/!y/$a{year}/;
-#	return $u;
-#}
-#sub sortKeys {
-##   my$self = shift;
-#   my%data = %{ shift() };
-#   my@ks = sort {
-#      $data{$a}->{dates}[0][0] cmp $data{$b}->{dates}[0][0]
-#   } keys %data;
-#   @ks;
-##   for(@ks) { print $data{$_}->{dates}[0][0] }
-#}
-#
-#sub limit {
-#   my%d = @_;
-#   my%data = %{$d{data}};
-#   delete $d{data};
-#   my@limits = @{ $d{(keys %d)[0]} };
-#   if ($d{and}) {
-#      for my$k (keys %data) {
-#         for my$t ( @{$data{$k}->{dates}} ) {
-#            for my$l (@limits) {
-#               print $k, @$t, $l;
-#            }
-#         }
-#      }
-#   } elsif ($d{or}) {
-#
-#   }
-#   print @limits;
-#}
 
 sub fetch {
 	my$self = shift;
-	$self->read(@_);
+	d 'read '.$_[1];
+	$self->read(@_); return;
+	d 'parse '.$self->what;
 	$self->parse;
+	d 'save '.$self->what."\n";
 	$self->save;
 }
+
 sub read {
    my$self = shift;
 	my%a = @_;
 	$self->what($a{what});
 	$a{month} ||= $month;
 	$a{year}  ||= $year;
-#	$self->address( getUrl( %a ) );
 
-#print $self->url;
-#	my$fn = $self->getName;
-	my$fn = 'cache/' . $year.'-'.$month.'-'.$self->what .'.html';
+	my($place) = $self->what =~ /([^-]+)/;
+	my$fn = "cache/$year-$month-$place.html";
 
-	goto NOCACHE;
+#	goto NOCACHE;
 	open my$f, '<', $fn or goto NOCACHE;
 	my$mt = (stat($f))[10];
 	goto NOCACHE if not recent $mt;
@@ -118,49 +74,48 @@ sub read {
 
 	if ($self->what =~ /stary/) {
 		my%url_of = (
-	 	 	stary_duza =>		'stary.pl/pl/repertuar/1',
-	  		stary_mala =>		'stary.pl/pl/repertuar/2',
+	 	 	stary_duza =>		'http://www.stary.pl/pl/repertuar/1',
+	  		stary_mala =>		'http://www.stary.pl/pl/repertuar/2',
 		);
 		$rsvp = HTTP::Request->new(POST => $url_of{ $self->what });
-
 		my$post = 'dateFrom='.$year.'-'.$month.'-01&dateTo='.$year.'-'.$month
 						 			.'-31&idSpectacle=&show=Poka%C5%BC';
-
 		$rsvp->content( $post );
+	} elsif ($self->what eq 'opera') {
+		my@ms = qw/styczen luty marzec kwiecien maj czerwiec lipiec sierpien wrzesien pazdziernik listopad grudzien/;
+		$rsvp = HTTP::Request->new(GET => 'http://opera.krakow.pl/pl/repertuar/na-afiszu/' . $ms[ $month-1 ] );
 	} else {
 		my%url_of = (
-			slowacki_duza =>	'http://slowacki.krakow.pl/pl/repertuar/duza_scena/_get/month/!m/year/!y',
-			slowacki_mala =>	'http://slowacki.krakow.pl/pl/repertuar/scena_miniatura/_get/month/!m/year/!y',
-			filharmonia => 	'http://www.filharmonia.krakow.pl/Repertuar/Kalendarium/?events=process&date=month&month=!m&year=!y',
-			opera	=>				'http://opera.krakow.pl/pl/repertuar/na-afiszu/!m',
-			bagatela =>			'http://www.bagatela.pl/Repertuar/?repertoire=repertoire&view_date=!y-!m'
+			slowacki_duza 			=>	'http://slowacki.krakow.pl/pl/repertuar/duza_scena/_get/month/!m/year/!y',
+			slowacki_mala 			=>	'http://slowacki.krakow.pl/pl/repertuar/scena_miniatura/_get/month/!m/year/!y',
+			filharmonia 			=>	'http://www.filharmonia.krakow.pl/Repertuar/Kalendarium/?events=process&date=month&month=!m&year=!y',
+			'bagatela-sarego' 	=> 'http://www.bagatela.pl/Repertuar/?repertoire=repertoire&view_date=!y-!m',
+			'bagatela-karmelicka'=>	'http://www.bagatela.pl/Repertuar/?repertoire=repertoire&view_date=!y-!m'
 		);
 		my$url = $url_of{ $self->what };
 		$url =~ s/!m/$month/;
 		$url =~ s/!y/$year/;
-		#print $url and die;
-		$rsvp = HTTP::Request->new(GET => $url_of{ $self->what });
+		$rsvp = HTTP::Request->new(GET => $url );
 	}
 	$rsvp = $ua->request($rsvp);
 	my$code = $rsvp->code;
 	if($code < 200 || $code  > 299) {
-		print 'http response ', $code;
+		print Dumper($rsvp->request);
+		open my$f, '>', "cache/$year-$month-$code.html"; print $f $rsvp->decoded_content; close $f;
+		die 'got '.$code;# from .$rsvp->request;
 	}
+	#print Dumper($rsvp->request) and die;
 	my$html = $rsvp->decoded_content ;
 	my($body) = $html =~ m/(<body.*body>)/s;
 	$body =~ s/<script.*?script>//sg;
-#	$body =~ s/\n//g;
-#	$body =~ s/&nbsp;/ /g;
-#	$body =~ s/&ndash;/-/g;
-#	$body =~ s/&oacute;/ó/g;
-#	$body =~ s/&quot;/"/g;
-#	$body =~ s/\s+/ /g;
+	$body =~ s/<br\s*\/?>//g;
+	$body =~ s/\n\n+/\n/g;
+	$body =~ s/[\t ]+/ /g;
 	my($title) = ($html =~ m/(<title.*?title>)/);
 	$html = '<html><head>'.$title.'</head>'.$body.'</html>' ;
 
 #	print $body and die('body');
-
-	open $f, '>', $fn or die('cant');
+	open $f, '>', $fn or warn "can't write to file $fn";
 	print $f $html;
 	close $f;
 
@@ -168,199 +123,182 @@ sub read {
 	return $code;
 }
 
+my%parsers = (
+	slowacki => sub {
+		my$self=shift;
+		my%shows;
+		my$dom = Mojo::DOM->new($self->html);
+		for my$r ($dom->at('#tableCalendary')->children->each) {
+			my($img,$desc) = (' ',' ');#unobligatory
+			my($dom) 		= $r =~ />\s*			([0123]?\d)		\s*</x;
+			my($url) 		= $r =~ /href="		([^"]+)			"/x;
+			my($title) 		= $r =~ /<a[^>]+>\s*	(.*?)				\s*<\/a/x;
+			my($hour) 		= $r =~ />\s*			(\d{1,2}:\d\d)	\s*</x;
+			next unless( defined $dom && defined $url && defined $title && defined $hour);
+
+			$shows{$url} = {title=> $title, dates=>[], desc=>$desc, img=>$img} if not $shows{$url};
+			push @{ $shows{$url}->{dates} }, "$year-$month-$dom $hour";
+		}
+		return \%shows;
+	},
+	stary => sub {
+		my$self=shift;
+		my%shows;
+		my$dom = Mojo::DOM->new($self->html);
+		for my$r ($dom->find('.mainFrameNews')->each) {
+			my($img) 	= $r =~ /src=".?([^"]+)/;
+			my$desc		= $r->find('.mainFrameNewsDesc');#->all_text;
+			my$title		= $desc->at('a')->text;
+			$title 		= "$title";
+			$desc 		= $desc->all_text;
+			$desc 		= "$desc"; #Mojo::Collection stringify method overload
+			my($hour)	= $r =~ /(\d\d:\d\d)/;
+			my($url) 	= $r =~ /href="		(.+?spektakl[^"]+)  /x;
+			my($date)	= $r->previous_sibling->previous_sibling =~ /([\d-]{8,10})/;
+			next unless( defined $date && defined $url && defined $title && defined $hour);
+
+			$shows{$url} = {title=> $title, dates=>[], desc=>$desc, img=>$img} if not $shows{$url};
+			push @{ $shows{$url}->{dates} }, "$date $hour";
+		}
+		return \%shows;
+	},
+	filharmonia => sub {
+		my$self=shift;
+		my%shows;
+		my$dom = Mojo::DOM->new($self->html);
+		for my$r ($dom->find('.event')->each) {
+			my($img) 	= $r->at('.thunbail') =~ /src=".?([^"]+)/;
+			my$title		= $r->at('h1')->a->text;
+			next if (!defined $title || $title =~ /DZIECI/);#to mnie nie interesuje
+			my$desc 		= $r->find('p')->all_text();
+			$desc   		= "$desc"; #Mojo::Collection stringify method overload
+			my$hour 		= $r->at('.hour')->text;
+			my($url)   	= $r =~ /href="		 ([^"]+)	  /x;
+			my($date)  	= $r =~ /dataday">\s* ([\d-]+)	/x;
+			next unless( defined $date && defined $url && defined $title && defined $hour);#obligatory
+
+			$shows{$url} = {title=> $title, dates=>[], desc=>$desc, img=>$img} if not $shows{$url};
+			push @{ $shows{$url}->{dates} }, "$date $hour";
+		}
+		return \%shows;
+	},
+	'bagatela-karmelicka' => sub {
+		my$self=shift;
+		my%shows;
+		my$dom = Mojo::DOM->new($self->html);
+		for my$r ($dom->find('.not-empty-a')->each) {
+			my($img,$desc) = (' ',' ');#unobligatory
+			my$url 		= $r->at('.name-a')->a->attr('href');
+			my$title 	= $r->at('.name-a')->a->text;
+			my$hour 		= $r->at('.hour-a')->all_text;
+			$hour =~ s/ /:/;
+			my$day = $r->at('.day-a');
+			if ($day) {
+				($day) 	= $day->text =~ /(\d+)/;
+			} else {
+				$day = $r->previous_sibling->previous_sibling->at('.day-a')->text =~ /(\d+)/;
+			}
+			next unless( defined $day && defined $url && defined $title && defined $hour);#obligatory
+
+			$shows{$url} = {title=> $title, dates=>[], desc=>$desc, img=>$img} if not $shows{$url};
+			push @{ $shows{$url}->{dates} }, $year.'-'.$month."-$day $hour";
+		}
+		return \%shows;
+	},
+	'bagatela-sarego' => sub {
+		my$self=shift;
+		my%shows;
+		my$dom = Mojo::DOM->new($self->html);
+		for my$r ($dom->find('.not-empty-b')->each) {#tu sie rozni
+			my($img,$desc) = (' ',' ');#unobligatory
+			my$url 		= $r->at('.name-b')->a->attr('href');
+			my$title 	= $r->at('.name-b')->a->text;
+			my$hour 		= $r->at('.hour-b')->all_text;
+			$hour =~ s/ /:/;
+			my$day = $r->at('.day-b');
+			if ($day) {
+				($day) 	= $day->text =~ /(\d+)/;
+			} else {
+				$day = $r->previous_sibling->previous_sibling->at('.day-b')->text =~ /(\d+)/;
+			}
+			next unless( defined $day && defined $url && defined $title && defined $hour);#obligatory
+
+			$shows{$url} = {title=> $title, dates=>[], desc=>$desc, img=>$img} if not $shows{$url};
+			push @{ $shows{$url}->{dates} }, $year.'-'.$month."-$day $hour";
+		}
+		return \%shows;
+	},
+	'opera' => sub {
+		my$self=shift;
+		my%shows;
+		my$dom = Mojo::DOM->new($self->html);
+		for my$r ($dom->find('.row-performance')->each) {#tylko tu sie rozni
+			my($img,$desc) = (' ',' ');#unobligatory
+			$img = $r->at('.item-photo')->img->attr('src');
+			my$url 		= $r->at('.item-title')->a->attr('href');
+			my$title 	= $r->at('.item-title')->a->text;
+			my$hour 		= $r->at('.item-time > .vcentered')->text;
+			my($day) = $r->at('.item-date > .vcentered')->text =~ /(\d+)/;
+			next unless( defined $day && defined $url && defined $title && defined $hour);#obligatory
+
+			$shows{$url} = {title=> $title, dates=>[], desc=>$desc, img=>$img} if not $shows{$url};
+			push @{ $shows{$url}->{dates} }, $year.'-'.$month."-$day $hour";
+		}
+		return \%shows;
+	}
+);
 sub parse {
 	my$self = shift;
+	my($what) = $self->what =~ /(^[^_]+)/;
 
-	my$dom = Mojo::DOM->new($self->html);
-
-	#print $self->html and die;
-
-   my%shows;
-	for my$r ($dom->at('#tableCalendary')->children->each) {
-		my($dom) 	= $r =~ />\s*			([0123]?\d)		\s*</x;
-#		my($dow) 	= $r =~ /td0a">\s*	(\w+)				/x;
-		my($url) 	= $r =~ /href="		([^"]+)			"/x;
-		my($title) 	= $r =~ /<a[^>]+>\s*	(.*?)				\s*<\/a/x;
-		my($hour) 	= $r =~ />\s*			(\d{1,2}:\d\d)	\s*</x;
-
-		#next unless( defined $dom && defined $dow && defined $url &&
-		next unless( defined $dom && defined $url &&
-						 defined $title && defined $hour);
-
-		$shows{$url} = [$title, []] if not $shows{$url};
-
-		push @{ $shows{$url}->[1] }, "$year-$month-$dom $hour";
+	my%shows = %{ $parsers{$what}($self) };
+	for my$k (keys %shows) {
+		utf8::encode( $shows{$k}->{desc} );                   #chyba nie dziala
+		utf8::encode( $shows{$k}->{title} );
+		$shows{$k}->{desc} = substr($shows{$k}->{desc}, 0, 600);
 	}
 	$self->shows( \%shows );
+
 }
 sub save {
 	my$self = shift;
 	my$dbh = DBI->connect("dbi:Pg:dbname=erato", "", "");
 	my%ss = %{$self->shows};
-	#print Dumper(%ss);
 
 	my%places = (
-		'slowacki_duza' => 'Słowacki - Duża Scena',
-		'slowacki_mala' => 'Słowacki - Scena Kameralna',
-		'stary_duza'	 => 'Stary - Duża Scena',
-		'stary_mala'	 => 'Stary - Scena Miniatura',
-		'filharmonia'	 => 'Filharmonia',
-		'bagatela'		 => 'Bagatela'
+		'slowacki_duza' 		=> 'Słowacki - Duża Scena',
+		'slowacki_mala' 		=> 'Słowacki - Scena Kameralna',
+		'stary_duza'	 		=> 'Stary - Duża Scena',
+		'stary_mala'	 		=> 'Stary - Scena Miniatura',
+		'filharmonia'	 		=> 'Filharmonia',
+		'bagatela-karmelicka'=> 'Bagatela - Karmelicka',
+		'bagatela-sarego'		=> 'Bagatela - Sarego',
+		'opera'					=> 'Opera'
 	);
 
    for my$url (keys %ss) {
-		$dbh->do('INSERT INTO shows VALUES (?,?,?)', undef,
-					$url, $ss{$url}->[0], $places{ $self->what });
-		for my$date (@{$ss{$url}->[1]}) {
+		$dbh->do('INSERT INTO shows VALUES (?,?,?,?,?)', undef,
+					$url, $ss{$url}->{title},
+					$places{ $self->what },
+					$ss{$url}->{img},
+					$ss{$url}->{desc}
+		);
+		for my$date (@{$ss{$url}->{dates}}) {
 			$dbh->do('INSERT INTO dates VALUES (?,?)',undef,
 						$url, $date);
 		}
 	}
 
 }
-sub prepare {
-   my($self,$html) = @_;
-}
 sub view {
 	print 'view'
 
 	}
-
-sub correctUrl {
-   my($self,$u) = @_;
-   unless(  $u =~ m@^(f|ht)tp://@ ) {
-      $self->address( 'http://' . $u );#thankfully doesn't call trigger again
-   }
-}
-
 
 sub BUILD {
    my$self = shift;
    mkdir $self->cache if !-e $self->cache;   #TODO cwd first!
 }
 
-sub getName {
-   my$self = shift;
-   my$u = $self->address;
-   return $fnames{$u} if($fnames{$u});
-   my$fn = $u;
-   $fn =~ s@[:/]@_@g;
-   $fnames{$u} = $self->cache .'/'. $fn;   #TODO generic os path separator
-}
-
-sub querystring {#class function
-   my%h = %{shift()};
-   my$qs = '';
-   for my$k (keys %h) {
-      $qs .= $k .'='. $h{$k} .'&';
-   }
-   $qs;
-}
-
-
-#before 'fetch' => sub {
-#   my($self,$a) = @_;
-#   $self->address($a) if $a;
-#   my$u = $self->address;
-#   if($u) {
-#      $u .= '?' . querystring($self->get);
-#      $self->url($u);
-#   }
-#};
-
-#sub fetch {
-#   my$self = shift;
-#
-#   my$fn = $self->getName;
-#
-#   open my$f, '<', $fn or goto NOCACHE;
-#   my$mt = (stat($f))[10];
-#   goto NOCACHE if not recent $mt;
-#   {  local $/; $self->html( <$f> ) }
-#   close $f;
-#   return 666;
-#
-#   NOCACHE:
-#   my$rsvp;
-#
-#   if( %{$self->post} ) {
-#      $rsvp = HTTP::Request->new(POST => $self->address);
-#      $rsvp->content( querystring($self->post) );
-#   } else {
-#      $rsvp = HTTP::Request->new(GET => $self->address);
-#   }
-#   $rsvp = $ua->request($rsvp);
-#   my$code = $rsvp->code;
-#   if($code < 200 || $code  > 299) {
-#      print 'http response ', $code;
-#   }
-#   my$html = $rsvp->content;
-#   ($html) = $html =~ /(<body.*body>)/s;
-#   $html =~ s/<script.*?script>//sg;
-#   $html =~ s/\n//g;
-#   $html =~ s/&nbsp;/ /g;
-#   $html =~ s/&ndash;/-/g;
-#   $html =~ s/&oacute;/ó/g;
-#   $html =~ s/&quot;/"/g;
-#   $html =~ s/\s+/ /g;
-##   print length $html;
-#
-#   $self->html( $html );
-#   open $f, '>', $fn;
-#   print $f $html;
-#   close $f;
-#
-#   return $code;
-#}
-
-sub addGet {
-   my$self = shift;
-#   my%nv = @_;
-   my%g = %{$self->get};
-   %g = ( %g, @_);
-   $self->get( %g );
-   print %{$self->get};
-}
-
 __PACKAGE__->meta->make_immutable;
 1;
-
-=begin
-package Fetcher;
-use Moose;
-extends 'Crawler';
-
-has 'month' => (is => 'rw', isa => 'Str');
-has 'year' => (is => 'rw', isa => 'Str');
-
-my($m, $y);#next month, next month's year
-
-sub BUILD {
-   ($m,$y) = (localtime)[4,5];
-   $m += 2, $y += 1900;
-   if($m == 13) {
-      $m = 1, ++$y;
-   }
-}
-
-
-before 'fetch' => sub {
-   my$self = shift;
-   if($self->month) {
-      if($self->post) {
-      } else {
-         print 'co';
-         $self->addGet( $self->month => $m );
-      }
-   }
-   if($self->year) {
-      if($self->post) {
-      } else {
-         $self->addGet( $self->year => $y );
-      }
-   }
-};
-
-__PACKAGE__->meta->make_immutable;
-1;
-=cut

@@ -3,32 +3,24 @@ use Moose;
 use LWP;
 use Data::Dumper;
 use Mojo::DOM;
-use DBI;
-use DBD::Pg;
 use HTTP::Cookies;
 use utf8;
 use open qw/:std :utf8/;
 
 my$DEBUG = 1;
 sub d($) { print STDERR shift }
-sub D { print Dumper(@_)}
+sub D($) { print Dumper(@_)}
 
 my@date = (localtime)[5,4];
 my$year = $date[0] + 1900;
 my$month = ($date[1]+2)%13;
 
-#has 'address' => (is => 'rw', isa => 'Str', trigger => \&correctUrl);
-#has 'get' => (is => 'rw', isa => 'HashRef', default => sub {{}});
-#has 'post' => (is => 'rw', isa => 'HashRef', default => sub {{}});
 has 'url' => (is => 'rw', isa => 'Str');
-#has 'row' => (is => 'rw', isa => 'Str');
 has 'html' => (is => 'rw', isa => 'Str');
 has 'cache' => (is => 'ro', isa => 'Str', default => 'cache');
 has 'parser' => (is => 'rw', isa => 'Ref');
 has 'shows' => (is => 'rw', isa=>'HashRef', default => sub {{}});
 has 'what' => (is => 'rw', isa=>'Str');
-#has 'month' => (is => 'rw', isa=>'Str');
-#has  'year' => (is => 'rw', isa=>'Number');
 
 my%fnames;
 my$ua = LWP::UserAgent->new;
@@ -40,17 +32,13 @@ $ua->cookie_jar( HTTP::Cookies->new(
 sub recent {#class function
    time - shift() < 3600;#okres waznosci 1h
 }
-
 sub fetch {
 	my$self = shift;
 	d 'read '.$_[1];
-	$self->read(@_); return;
+	$self->read(@_);
 	d 'parse '.$self->what;
-	$self->parse;
-	d 'save '.$self->what."\n";
-	$self->save;
+	return $self->parse;
 }
-
 sub read {
    my$self = shift;
 	my%a = @_;
@@ -109,7 +97,8 @@ sub read {
 	my($body) = $html =~ m/(<body.*body>)/s;
 	$body =~ s/<script.*?script>//sg;
 	$body =~ s/<br\s*\/?>//g;
-	$body =~ s/\n\n+/\n/g;
+	$body =~ s/\s*\n\s*/\n/g;
+#	$body =~ s/\n\n+/\n/g;
 	$body =~ s/[\t ]+/ /g;
 	my($title) = ($html =~ m/(<title.*?title>)/);
 	$html = '<html><head>'.$title.'</head>'.$body.'</html>' ;
@@ -125,26 +114,26 @@ sub read {
 
 my%parsers = (
 	slowacki => sub {
-		my$self=shift;
-		my%shows;
+		my$self=shift; my%shows;
 		my$dom = Mojo::DOM->new($self->html);
+
 		for my$r ($dom->at('#tableCalendary')->children->each) {
 			my($img,$desc) = (' ',' ');#unobligatory
 			my($dom) 		= $r =~ />\s*			([0123]?\d)		\s*</x;
 			my($url) 		= $r =~ /href="		([^"]+)			"/x;
 			my($title) 		= $r =~ /<a[^>]+>\s*	(.*?)				\s*<\/a/x;
 			my($hour) 		= $r =~ />\s*			(\d{1,2}:\d\d)	\s*</x;
-			next unless( defined $dom && defined $url && defined $title && defined $hour);
 
+			next unless( defined $dom && defined $url && defined $title && defined $hour);
 			$shows{$url} = {title=> $title, dates=>[], desc=>$desc, img=>$img} if not $shows{$url};
 			push @{ $shows{$url}->{dates} }, "$year-$month-$dom $hour";
 		}
 		return \%shows;
 	},
 	stary => sub {
-		my$self=shift;
-		my%shows;
+		my$self=shift; my%shows;
 		my$dom = Mojo::DOM->new($self->html);
+
 		for my$r ($dom->find('.mainFrameNews')->each) {
 			my($img) 	= $r =~ /src=".?([^"]+)/;
 			my$desc		= $r->find('.mainFrameNewsDesc');#->all_text;
@@ -155,17 +144,17 @@ my%parsers = (
 			my($hour)	= $r =~ /(\d\d:\d\d)/;
 			my($url) 	= $r =~ /href="		(.+?spektakl[^"]+)  /x;
 			my($date)	= $r->previous_sibling->previous_sibling =~ /([\d-]{8,10})/;
-			next unless( defined $date && defined $url && defined $title && defined $hour);
 
+			next unless( defined $date && defined $url && defined $title && defined $hour);
 			$shows{$url} = {title=> $title, dates=>[], desc=>$desc, img=>$img} if not $shows{$url};
 			push @{ $shows{$url}->{dates} }, "$date $hour";
 		}
 		return \%shows;
 	},
 	filharmonia => sub {
-		my$self=shift;
-		my%shows;
+		my$self=shift; my%shows;
 		my$dom = Mojo::DOM->new($self->html);
+
 		for my$r ($dom->find('.event')->each) {
 			my($img) 	= $r->at('.thunbail') =~ /src=".?([^"]+)/;
 			my$title		= $r->at('h1')->a->text;
@@ -175,72 +164,72 @@ my%parsers = (
 			my$hour 		= $r->at('.hour')->text;
 			my($url)   	= $r =~ /href="		 ([^"]+)	  /x;
 			my($date)  	= $r =~ /dataday">\s* ([\d-]+)	/x;
-			next unless( defined $date && defined $url && defined $title && defined $hour);#obligatory
 
+			next unless( defined $date && defined $url && defined $title && defined $hour);#obligatory
 			$shows{$url} = {title=> $title, dates=>[], desc=>$desc, img=>$img} if not $shows{$url};
 			push @{ $shows{$url}->{dates} }, "$date $hour";
 		}
 		return \%shows;
 	},
 	'bagatela-karmelicka' => sub {
-		my$self=shift;
-		my%shows;
+		my$self=shift; my%shows;
 		my$dom = Mojo::DOM->new($self->html);
+
 		for my$r ($dom->find('.not-empty-a')->each) {
 			my($img,$desc) = (' ',' ');#unobligatory
 			my$url 		= $r->at('.name-a')->a->attr('href');
 			my$title 	= $r->at('.name-a')->a->text;
 			my$hour 		= $r->at('.hour-a')->all_text;
-			$hour =~ s/ /:/;
+			$hour 		=~ s/ /:/;
 			my$day = $r->at('.day-a');
 			if ($day) {
 				($day) 	= $day->text =~ /(\d+)/;
 			} else {
 				$day = $r->previous_sibling->previous_sibling->at('.day-a')->text =~ /(\d+)/;
 			}
-			next unless( defined $day && defined $url && defined $title && defined $hour);#obligatory
 
+			next unless( defined $day && defined $url && defined $title && defined $hour);#obligatory
 			$shows{$url} = {title=> $title, dates=>[], desc=>$desc, img=>$img} if not $shows{$url};
 			push @{ $shows{$url}->{dates} }, $year.'-'.$month."-$day $hour";
 		}
 		return \%shows;
 	},
 	'bagatela-sarego' => sub {
-		my$self=shift;
-		my%shows;
+		my$self=shift; my%shows;
 		my$dom = Mojo::DOM->new($self->html);
+
 		for my$r ($dom->find('.not-empty-b')->each) {#tu sie rozni
 			my($img,$desc) = (' ',' ');#unobligatory
-			my$url 		= $r->at('.name-b')->a->attr('href');
-			my$title 	= $r->at('.name-b')->a->text;
-			my$hour 		= $r->at('.hour-b')->all_text;
-			$hour =~ s/ /:/;
-			my$day = $r->at('.day-b');
+			my$url 	= $r->at('.name-b')->a->attr('href');
+			my$title = $r->at('.name-b')->a->text;
+			my$hour 	= $r->at('.hour-b')->all_text;
+			$hour 	=~ s/ /:/;
+			my$day 	= $r->at('.day-b');
 			if ($day) {
 				($day) 	= $day->text =~ /(\d+)/;
 			} else {
 				$day = $r->previous_sibling->previous_sibling->at('.day-b')->text =~ /(\d+)/;
 			}
-			next unless( defined $day && defined $url && defined $title && defined $hour);#obligatory
 
+			next unless( defined $day && defined $url && defined $title && defined $hour);#obligatory
 			$shows{$url} = {title=> $title, dates=>[], desc=>$desc, img=>$img} if not $shows{$url};
 			push @{ $shows{$url}->{dates} }, $year.'-'.$month."-$day $hour";
 		}
 		return \%shows;
 	},
 	'opera' => sub {
-		my$self=shift;
-		my%shows;
+		my$self=shift; my%shows;
 		my$dom = Mojo::DOM->new($self->html);
-		for my$r ($dom->find('.row-performance')->each) {#tylko tu sie rozni
-			my($img,$desc) = (' ',' ');#unobligatory
-			$img = $r->at('.item-photo')->img->attr('src');
-			my$url 		= $r->at('.item-title')->a->attr('href');
-			my$title 	= $r->at('.item-title')->a->text;
-			my$hour 		= $r->at('.item-time > .vcentered')->text;
-			my($day) = $r->at('.item-date > .vcentered')->text =~ /(\d+)/;
-			next unless( defined $day && defined $url && defined $title && defined $hour);#obligatory
 
+		for my$r ($dom->find('.row-performance')->each) {#tylko tu sie rozni
+			my$desc	= '';#unobligatory
+			my$img 	= $r->at('.item-photo')->img->attr('src');
+			my$url 	= $r->at('.item-title')->a->attr('href');
+			my$title = $r->at('.item-title')->a->text;
+			my$hour 	= $r->at('.item-time > .vcentered')->text;
+			my($day) = $r->at('.item-date > .vcentered')->text =~ /(\d+)/;
+
+			next unless( defined $day && defined $url && defined $title && defined $hour);#obligatory
 			$shows{$url} = {title=> $title, dates=>[], desc=>$desc, img=>$img} if not $shows{$url};
 			push @{ $shows{$url}->{dates} }, $year.'-'.$month."-$day $hour";
 		}
@@ -252,43 +241,10 @@ sub parse {
 	my($what) = $self->what =~ /(^[^_]+)/;
 
 	my%shows = %{ $parsers{$what}($self) };
-	for my$k (keys %shows) {
-		utf8::encode( $shows{$k}->{desc} );                   #chyba nie dziala
-		utf8::encode( $shows{$k}->{title} );
-		$shows{$k}->{desc} = substr($shows{$k}->{desc}, 0, 600);
-	}
-	$self->shows( \%shows );
+	$shows{what} = $self->what;
 
-}
-sub save {
-	my$self = shift;
-	my$dbh = DBI->connect("dbi:Pg:dbname=erato", "", "");
-	my%ss = %{$self->shows};
-
-	my%places = (
-		'slowacki_duza' 		=> 'Słowacki - Duża Scena',
-		'slowacki_mala' 		=> 'Słowacki - Scena Kameralna',
-		'stary_duza'	 		=> 'Stary - Duża Scena',
-		'stary_mala'	 		=> 'Stary - Scena Miniatura',
-		'filharmonia'	 		=> 'Filharmonia',
-		'bagatela-karmelicka'=> 'Bagatela - Karmelicka',
-		'bagatela-sarego'		=> 'Bagatela - Sarego',
-		'opera'					=> 'Opera'
-	);
-
-   for my$url (keys %ss) {
-		$dbh->do('INSERT INTO shows VALUES (?,?,?,?,?)', undef,
-					$url, $ss{$url}->{title},
-					$places{ $self->what },
-					$ss{$url}->{img},
-					$ss{$url}->{desc}
-		);
-		for my$date (@{$ss{$url}->{dates}}) {
-			$dbh->do('INSERT INTO dates VALUES (?,?)',undef,
-						$url, $date);
-		}
-	}
-
+#	$self->shows( \%shows );
+	return \%shows;
 }
 sub view {
 	print 'view'
@@ -300,5 +256,8 @@ sub BUILD {
    mkdir $self->cache if !-e $self->cache;   #TODO cwd first!
 }
 
+sub load {
+	my$self = shift;
+}
 __PACKAGE__->meta->make_immutable;
 1;

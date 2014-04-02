@@ -66,30 +66,30 @@ sub dow {
 
 sub getShows {
 	my$self = shift;
-	my$s = 'SELECT url,showtime FROM shows NATURAL JOIN dates';
+	my$keep = shift;
+	my$s = 'SELECT url,showtime,title,place,img,description FROM shows NATURAL JOIN dates';
 	my$w = '';
 	if( $self->where ) {
 		my$l = $self->link;
 		$w .= ' WHERE '. join(" $l ", @{$self->where});
 	}
 	$s .= $w .' ORDER BY showtime';
-	print $s;
-	my$res = $dbh->selectall_hashref($s, ['showtime']);
-	print Dumper($res);
+	$self->where( [] ) unless $keep;
+	my$res = $dbh->selectall_arrayref($s);#, ['showtime']);
 }
-
 
 sub save {
 	my$self = shift;
-	print @_;
 	my%ss = %{ shift() };
 	my$what = $ss{what};
 	delete $ss{what};
 
    for my$url (keys %ss) {
-		utf8::encode( $ss{$url}->{desc} );                   #chyba nie dziala
+		if (defined $ss{$url}->{desc}) {
+			utf8::encode( $ss{$url}->{desc} );                   #chyba nie dziala
+			$ss{$url}->{desc} = substr($ss{$url}->{desc}, 0, 600);
+		}
 		utf8::encode( $ss{$url}->{title} );
-		$ss{$url}->{desc} = substr($ss{$url}->{desc}, 0, 600);
 
 		$dbh->do('INSERT INTO shows VALUES (?,?,?,?,?)', undef,
 					$url, $ss{$url}->{title},
@@ -97,12 +97,11 @@ sub save {
 					$ss{$url}->{img},
 					$ss{$url}->{desc}
 		);
+# 	$dbh->do('UPDATE shows SET img=NULL WHERE LENGTH(img)<3',undef);
+#		$dbh->do('UPDATE shows SET description=NULL WHERE LENGTH(description)<3',undef);
 		for my$date (@{$ss{$url}->{dates}}) {
 			$dbh->do('INSERT INTO dates VALUES (?,?)',undef,
 						$url, $date);
 		}
 	}
-}
-sub load {
-	my$self = shift;
 }

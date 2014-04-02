@@ -15,11 +15,11 @@ my@date = (localtime)[5,4];
 my$year = $date[0] + 1900;
 my$month = ($date[1]+2)%13;
 
-has 'url' => (is => 'rw', isa => 'Str');
+#has 'url' => (is => 'rw', isa => 'Str');
 has 'html' => (is => 'rw', isa => 'Str');
 has 'cache' => (is => 'ro', isa => 'Str', default => 'cache');
-has 'parser' => (is => 'rw', isa => 'Ref');
-has 'shows' => (is => 'rw', isa=>'HashRef', default => sub {{}});
+#has 'parser' => (is => 'rw', isa => 'Ref');
+#has 'shows' => (is => 'rw', isa=>'HashRef', default => sub {{}});
 has 'what' => (is => 'rw', isa=>'Str');
 
 my%fnames;
@@ -135,7 +135,7 @@ my%parsers = (
 		my$dom = Mojo::DOM->new($self->html);
 
 		for my$r ($dom->find('.mainFrameNews')->each) {
-			my($img) 	= $r =~ /src=".?([^"]+)/;
+			my($img) 	= $r =~ /src="\.?([^"]+)/;
 			my$desc		= $r->find('.mainFrameNewsDesc');#->all_text;
 			my$title		= $desc->at('a')->text;
 			$title 		= "$title";
@@ -156,7 +156,7 @@ my%parsers = (
 		my$dom = Mojo::DOM->new($self->html);
 
 		for my$r ($dom->find('.event')->each) {
-			my($img) 	= $r->at('.thunbail') =~ /src=".?([^"]+)/;
+			my($img) 	= $r->at('.thunbail') =~ /src="\.?([^"]+)/;
 			my$title		= $r->at('h1')->a->text;
 			next if (!defined $title || $title =~ /DZIECI/);#to mnie nie interesuje
 			my$desc 		= $r->find('p')->all_text();
@@ -176,21 +176,23 @@ my%parsers = (
 		my$dom = Mojo::DOM->new($self->html);
 
 		for my$r ($dom->find('.not-empty-a')->each) {
-			my($img,$desc) = (' ',' ');#unobligatory
+			my($img,$desc)=(' ',' ');#unobligatory
 			my$url 		= $r->at('.name-a')->a->attr('href');
 			my$title 	= $r->at('.name-a')->a->text;
-			my$hour 		= $r->at('.hour-a')->all_text;
-			$hour 		=~ s/ /:/;
+			my@hour 		= split "\n", $r->find('.hour-a')->all_text;
+			@hour = map{ s/ /:/g; $_ } @hour;
+
 			my$day = $r->at('.day-a');
 			if ($day) {
 				($day) 	= $day->text =~ /(\d+)/;
 			} else {
-				$day = $r->previous_sibling->previous_sibling->at('.day-a')->text =~ /(\d+)/;
+				($day) = $r->previous_sibling->previous_sibling->at('.day-a')->text =~ /(\d+)/;
 			}
-
-			next unless( defined $day && defined $url && defined $title && defined $hour);#obligatory
+			next unless( defined $day && defined $url && defined $title && @hour);#obligatory
 			$shows{$url} = {title=> $title, dates=>[], desc=>$desc, img=>$img} if not $shows{$url};
-			push @{ $shows{$url}->{dates} }, $year.'-'.$month."-$day $hour";
+			for my$h (@hour) {
+				push @{ $shows{$url}->{dates} }, $year.'-'.$month."-$day $h";
+			}
 		}
 		return \%shows;
 	},
@@ -202,18 +204,20 @@ my%parsers = (
 			my($img,$desc) = (' ',' ');#unobligatory
 			my$url 	= $r->at('.name-b')->a->attr('href');
 			my$title = $r->at('.name-b')->a->text;
-			my$hour 	= $r->at('.hour-b')->all_text;
-			$hour 	=~ s/ /:/;
-			my$day 	= $r->at('.day-b');
+			my@hour 		= split "\n", $r->find('.hour-b')->all_text;
+			@hour = map{ s/ /:/g; $_ } @hour;
+
+			my$day = $r->at('.day-b');
 			if ($day) {
 				($day) 	= $day->text =~ /(\d+)/;
 			} else {
-				$day = $r->previous_sibling->previous_sibling->at('.day-b')->text =~ /(\d+)/;
+				($day) = $r->previous_sibling->previous_sibling->at('.day-b')->text =~ /(\d+)/;
 			}
-
-			next unless( defined $day && defined $url && defined $title && defined $hour);#obligatory
+			next unless( defined $day && defined $url && defined $title && @hour);#obligatory
 			$shows{$url} = {title=> $title, dates=>[], desc=>$desc, img=>$img} if not $shows{$url};
-			push @{ $shows{$url}->{dates} }, $year.'-'.$month."-$day $hour";
+			for my$h (@hour) {
+				push @{ $shows{$url}->{dates} }, $year.'-'.$month."-$day $h";
+			}
 		}
 		return \%shows;
 	},
@@ -239,18 +243,10 @@ my%parsers = (
 sub parse {
 	my$self = shift;
 	my($what) = $self->what =~ /(^[^_]+)/;
-
 	my%shows = %{ $parsers{$what}($self) };
 	$shows{what} = $self->what;
-
-#	$self->shows( \%shows );
 	return \%shows;
 }
-sub view {
-	print 'view'
-
-	}
-
 sub BUILD {
    my$self = shift;
    mkdir $self->cache if !-e $self->cache;   #TODO cwd first!

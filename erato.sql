@@ -1,28 +1,29 @@
-drop table if exists dates;
-drop table if exists shows;
-drop table if exists places;
+DROP TABLE IF EXISTS dates;
+DROP TABLE IF EXISTS shows;
+DROP TABLE IF EXISTS places;
 
-create table places(
-	place varchar(100) primary key,
-	baseurl varchar(100) not null
+CREATE TABLE places(
+	place VARCHAR(100) PRIMARY KEY,
+	baseurl VARCHAR(100) NOT NULL
 );
-create table shows(
-	url varchar(200) primary key,
-	title varchar(300) not null,
-	place varchar(80) references places(place) not null,
-	img varchar(200),
-	description varchar(600)
+CREATE TABLE shows(
+	url VARCHAR(200) PRIMARY KEY,
+	title VARCHAR(300) NOT NULL,
+	place VARCHAR(80) REFERENCES places(place) NOT NULL,
+	img VARCHAR(200),
+	description VARCHAR(600)
 );
-create table dates(
-	url varchar(100) references shows(url),
-	showtime timestamp not null
+CREATE TABLE dates(
+	url VARCHAR(100) REFERENCES shows(url),
+	showtime TIMESTAMP,
+	PRIMARY KEY (url, showtime)
 );
 
-insert into places values ('Filharmonia', 'filharmonia.krakow.pl');
-insert into places values ('Słowacki - Duża Scena', 'slowacki.krakow.pl');
-insert into places values ('Słowacki - Scena Kameralna', 'slowacki.krakow.pl');
-insert into places values ('Stary - Duża Scena', 'stary.pl');
-insert into places values ('Stary - Scena Miniatura', 'stary.pl');
-insert into places values ('Bagatela - Karmelicka', 'bagatela.pl');
-insert into places values ('Bagatela - Sarego', 'bagatela.pl');
-insert into places values ('Opera', 'opera.krakow.pl');
+INSERT INTO places VALUES ('Filharmonia', 'filharmonia.krakow.pl');
+INSERT INTO places VALUES ('Słowacki - Duża Scena', 'slowacki.krakow.pl');
+INSERT INTO places VALUES ('Słowacki - Scena Kameralna', 'slowacki.krakow.pl');
+INSERT INTO places VALUES ('Stary - Duża Scena', 'stary.pl');
+INSERT INTO places VALUES ('Stary - Scena Miniatura', 'stary.pl');
+INSERT INTO places VALUES ('Bagatela - Karmelicka', 'bagatela.pl');
+INSERT INTO places VALUES ('Bagatela - Sarego', 'bagatela.pl');
+INSERT INTO places VALUES ('Opera', 'opera.krakow.pl');

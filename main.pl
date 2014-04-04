@@ -13,15 +13,14 @@ use Crawler;
 use Sender;
 use Data::Dumper;
 
-
 my$c = new Crawler;
 my$m = new Model;
 my$s = new Sender;
 
 sub fetchAll {
 	for my$w (qw/slowacki_duza slowacki_mala filharmonia stary_duza stary_mala opera bagatela-sarego bagatela-karmelicka/) {
-		my$href = $c->fetch(what => $w);
-		$m->save($href);
+		my$aref = $c->fetch(what => $w);
+		$m->save($w, $aref);
 	}
 }
 
@@ -36,7 +35,8 @@ sub mailRegular {
 	$s->add($aref);
 	$aref = $m->place(['slowacki_duza', 'slowacki_mala', 'opera'])->getShows;	#reszta we wszystkie dni
 	$s->add($aref);
-	$s->write;
+	$s->write(qw/bagatela-karmelicka bagatela-sarego stary_duza stary_mala slowacki_duza slowacki_mala opera filharmonia/);
+#	return;
 	$s->recipients( ['jbieron@gmail.com'] );
 	$s->send;
 }
@@ -44,12 +44,3 @@ sub mailRegular {
 
 fetchAll();
 mailRegular();
-#$c->fetch(what => 'slowacki_duza');
-#$c->fetch(what => 'bagatela-karmelicka');
-#$c->fetch(what => 'slowacki_mala');
-#$c->fetch(what => 'filharmonia');
-#$c->fetch(what => 'stary_duza');
-#$c->fetch(what => 'opera');
-#$c->view(format => 'html');
-#$m->place(['stary_duza', 'opera'])->dow(5)->getShows;
-#die;

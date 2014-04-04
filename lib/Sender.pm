@@ -11,11 +11,10 @@ has 'message' 		=> (is=> 'rw', isa=> 'Str', default => 'Kurier Kulturalny');
 has 'shows' 		=> (is=> 'rw', isa=> 'ArrayRef', default=> sub {[]});
 has 'recipients' 	=> (is=> 'rw', isa=> 'ArrayRef');
 
-my@date = (localtime)[5,4];
-my$year = $date[0] + 1900;
-my$month = ($date[1]+2)%13;
-#my$fn = "cache/$year-$month-mail.html";
-my$fn = "mail.html";
+my$year = $Crawler::year;
+my$month = $Crawler::month;
+my$fn = "$year-$month-mail.html";
+#my$fn = "mail.html";
 
 sub add {
 	my$self=shift;
@@ -107,6 +106,7 @@ sub trow {
 }
 sub write {
 	my$self=shift;
+	my@seq = map {$Model::places{$_} } @_;
 	my($header, $footer) = do{local$/="\n\n"; <DATA>};
 	$header =~ s/!title/$self->title()/e;
 	my$str = $header;
@@ -118,8 +118,10 @@ sub write {
    	$s{$place}->{$url} = [[],$url,$title,$img,$desc] unless $s{$place}->{$url};
    	push @{ $s{$place}->{$url}->[0] }, $time;
    }
+
+	@seq = sort keys %s unless @seq;
 	my$odd = 1;
-	for my$p (sort keys %s) {
+	for my$p (@seq) {
 		$str .= '<table style="margin:15px auto">';
 		$str .= thead($p);
 		my@shows = sort {$a->[0][0] gt $b->[0][0] } values %{$s{$p}};
@@ -134,6 +136,7 @@ sub write {
 	close $f;
 	$self->message($str);
 }
+__PACKAGE__->meta->make_immutable;
 1;
 __DATA__
 <html><head>

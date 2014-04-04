@@ -1,27 +1,17 @@
 package Model;
 use Moose;
 use Data::Dumper;
-#use Rose::DB;
-#our@ISA = qw/Rose::DB/;
-#__PACKAGE__->use_private_registry;
-#__PACKAGE__->register_db(
-#	driver   => 'pg',
-#	database => 'erato',
-#	host     => 'localhost',
-#	username => '',
-#	password => '',
-#);
+use utf8;
 use DBI;
 use DBD::Pg;
 my$dbh = DBI->connect('dbi:Pg:dbname=erato', '', '');
 
-#has 'data' => (is => 'rw', isa => 'HashRef', default => sub {{}});
 has 'where' => (is => 'rw', isa => 'ArrayRef', default=> sub {[]});
 has 'command' => (is=>'rw', isa=>'Str');
 has 'from' => (is=>'rw', isa=>'Str');
 has 'link' => (is=>'rw', isa=>'Str', default => 'AND');
 
-my%places = (
+our%places = (
 	'slowacki_duza' 		=> 'Słowacki - Duża Scena',
 	'slowacki_mala' 		=> 'Słowacki - Scena Kameralna',
 	'stary_duza'	 		=> 'Stary - Duża Scena',
@@ -83,28 +73,36 @@ sub getShows {
 
 sub save {
 	my$self = shift;
-	my%ss = %{ shift() };
-	my$what = $ss{what};
-	delete $ss{what};
+	my$what = shift;
+	my@shows = @{ shift() };
 
-   for my$url (keys %ss) {
-		if (defined $ss{$url}->{desc}) {
-			utf8::encode( $ss{$url}->{desc} );                   #chyba nie dziala
-			$ss{$url}->{desc} = substr($ss{$url}->{desc}, 0, 600);
+	my%inserted;
+	my$r = '';
+	for my$s (@shows) {
+		my%s = %$s;
+		goto SHOWTIME if $inserted{$s{url}};
+		$inserted{$s{url}}++;
+
+		if (defined $s{desc}) {
+			utf8::encode( $s{desc} );                   #chyba nie dziala
+			$s{desc} = substr($s{desc}, 0, 600);
 		}
-		utf8::encode( $ss{$url}->{title} );
+		utf8::encode( $s{title} );
 
 		$dbh->do('INSERT INTO shows VALUES (?,?,?,?,?)', undef,
-					$url, $ss{$url}->{title},
+					$s{url},
+					$s{title},
 					$places{ $what },
-					$ss{$url}->{img},
-					$ss{$url}->{desc}
-		);
-# 	$dbh->do('UPDATE shows SET img=NULL WHERE LENGTH(img)<3',undef);
-#		$dbh->do('UPDATE shows SET description=NULL WHERE LENGTH(description)<3',undef);
-		for my$date (@{$ss{$url}->{dates}}) {
-			$dbh->do('INSERT INTO dates VALUES (?,?)',undef,
-						$url, $date);
-		}
+					$s{img},
+					$s{desc}
+		);#will set off a lot of warnings due to unique constraint, hence goto
+
+		SHOWTIME:
+		$r .= "$s{url}\t\t$s{date}\n";
+		$dbh->do('INSERT INTO dates VALUES (?,?)',undef,
+					$s{url},
+					$s{date});
 	}
+	#print $r;
 }
+__PACKAGE__->meta->make_immutable;

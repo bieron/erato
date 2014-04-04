@@ -48,11 +48,13 @@ sub place {
    	$p = join ',', map { "'$places{$_}'" } @$p;
 		$p = 'IN('.$p.')';
 	} else {
-		$p = "='$p'"
+		$p = "='$places{$p}'"
 	}
-	my@where = @{ $self->where };
-	push @where,  'place '.$p;
-	$self->where(\@where);
+	push @{$self->where}, 'place '.$p;
+#	my@where = @{ $self->where };
+
+#	push @where,  'place '.$p;
+#	$self->where(\@where);
 	$self
 }
 sub dow {
@@ -73,8 +75,9 @@ sub getShows {
 		my$l = $self->link;
 		$w .= ' WHERE '. join(" $l ", @{$self->where});
 	}
-	$s .= $w .' ORDER BY showtime';
 	$self->where( [] ) unless $keep;
+	$s .= $w .' ORDER BY showtime';
+  # warn $s;
 	my$res = $dbh->selectall_arrayref($s);#, ['showtime']);
 }
 

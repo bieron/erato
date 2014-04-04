@@ -37,9 +37,12 @@ sub mailRegular {
 	$aref = $m->place(['slowacki_duza', 'slowacki_mala', 'opera'])->getShows;	#reszta we wszystkie dni
 	$s->add($aref);
 	$s->write;
-	$s->recipients( ['jbieron@gmail.com', 'dj-jb@o2.pl', 'jbieron@student.agh.edu.pl', 'jasiu@lazy.if.uj.edu.pl'] );
+	$s->recipients( ['jbieron@gmail.com'] );
 	$s->send;
 }
+
+
+fetchAll();
 mailRegular();
 #$c->fetch(what => 'slowacki_duza');
 #$c->fetch(what => 'bagatela-karmelicka');

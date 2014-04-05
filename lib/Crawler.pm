@@ -15,7 +15,6 @@ has 'html' => (is => 'rw', isa => 'Str');
 has 'cache' => (is => 'ro', isa => 'Str', default => 'cache');
 has 'what' => (is => 'rw', isa=>'Str');
 
-my%fnames;
 my$ua = LWP::UserAgent->new;
 $ua->agent('Mozilla/8.0');
 #$ua->cookie_jar( HTTP::Cookies->new(
@@ -27,12 +26,10 @@ sub recent {#class function
 }
 sub fetch {
 	my$self = shift;
-	d 'read '.$_[1];
-	$self->read(@_);
-	d 'parse '.$self->what;
-	return $self->parse;
+	$self->get_html(@_);
+	return $self->parse_html;
 }
-sub read {
+sub get_html {
    my$self = shift;
 	my%a = @_;
 	$self->what($a{what});
@@ -44,11 +41,11 @@ sub read {
 
 	#goto NOCACHE;
 	open my$f, '<', $fn or goto NOCACHE;
-	my$mt = (stat($f))[10];
-	goto NOCACHE if not recent $mt;
+	my$mt = (stat $f)[10];
+	(close $f and goto NOCACHE) if not recent $mt;
 	{  local $/; $self->html( <$f> ) }
 	close $f;
-	return 666;
+	return 304;#http non modified
 
 	NOCACHE:
 	my$rsvp;
@@ -82,10 +79,10 @@ sub read {
 	my$code = $rsvp->code;
 	if($code < 200 || $code  > 299) {
 		print Dumper($rsvp->request);
-		open my$f, '>', "cache/$year-$month-$code.html"; print $f $rsvp->decoded_content; close $f;
-		die 'got '.$code;# from .$rsvp->request;
+		open my$f, '>', "cache/$year-$month-$code.html" or warn 'can\'t write';
+		print $f $rsvp->decoded_content; close $f;
+		warn 'got '.$code;
 	}
-	#print Dumper($rsvp->request) and die;
 	my$html = $rsvp->decoded_content ;
 	my($body) = $html =~ m/(<body.*body>)/s;
 	$body =~ s/<script.*?script>//sg;
@@ -96,7 +93,6 @@ sub read {
 	my($title) = ($html =~ m/(<title.*?title>)/);
 	$html = '<html><head>'.$title.'</head>'.$body.'</html>' ;
 
-#	print $body and die('body');
 	open $f, '>', $fn or warn "can't write to file $fn";
 	print $f $html;
 	close $f;
@@ -139,7 +135,7 @@ my%parser = (
 	},
 	filharmonia => {marker => '.event', 'sub' => sub {
 			my$r=shift;
-			my($img) 	= $r->at('.thunbail') =~ /src="\.?([^"]+)/;
+		   my($img) 	= $r->at('.thunbail') =~ /src="\.?([^"]+)/;
 			my$title		= $r->at('h1')->a->text;
 			return if (!defined $title || $title =~ /DZIECI/);#to mnie nie interesuje
 			my$desc 		= $r->find('p')->all_text(0);
@@ -179,7 +175,7 @@ my%parser = (
 	},
 	'bagatela-sarego' => {marker => '.not-empty-b', 'sub' => sub {
 			my$r=shift;
-			my($img,$desc)=(' ',' ');#unobligatory
+			my($img,$desc)=('','');#unobligatory
 			my$url 		= $r->at('.name-b')->a->attr('href');
 			my$title 	= $r->at('.name-b')->a->text;
 			my@hour 		= split "\n", $r->find('.hour-b')->all_text;
@@ -212,7 +208,7 @@ my%parser = (
 			return {url=>$url, title=> $title, date=>$date, desc=>$desc, img=>$img};
 	}}
 );
-sub parse {
+sub parse_html {
 	my$self = shift;
 	my($what) = $self->what =~ /(^[^_]+)/;
 	my$dom = Mojo::DOM->new($self->html);
@@ -229,8 +225,37 @@ sub BUILD {
    mkdir $self->cache if !-e $self->cache;   #TODO cwd first!
 }
 
-sub load {
-	my$self = shift;
-}
 __PACKAGE__->meta->make_immutable;
 1;
+
+=encoding utf8
+
+=head1 NAME
+Crawler
+
+
+=head1 DESCRIPTION
+moduł erato ściągający, parsujący i archiwizujący
+
+=head2 METHODS
+
+=over 12
+
+=item C<recent>
+sprawdza czy ma aktualny repertuar
+
+=item C<fetch>
+opakowanie dla get_html i parse_html
+
+=item C<get_html>
+usiluje sciagnac (lub przeczytac z archiwum) aktualny repertuar podany w $_{what}
+
+=item C<parse_html>
+korzystajac z instrukcji w %parser, wyszukuje interesujące dane i zwraca je w postaci listy referencji do hashy
+
+=back
+
+=head1 AUTHOR
+dj-jb@o2.pl
+
+=cut

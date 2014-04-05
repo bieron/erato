@@ -4,6 +4,7 @@ use Data::Dumper;
 use utf8;
 use DBI;
 use DBD::Pg;
+use constant DESC_LEN => 600;
 my$dbh = DBI->connect('dbi:Pg:dbname=erato', '', '');
 
 has 'where' => (is => 'rw', isa => 'ArrayRef', default=> sub {[]});
@@ -22,7 +23,7 @@ our%places = (
 	'opera'					=> 'Opera'
 );
 
-sub toStr {
+sub to_str {
 	my$el = shift;
 	if(ref $el eq 'ARRAY') {
 		$el = ' IN('.join(',',@$el).')';
@@ -41,22 +42,16 @@ sub place {
 		$p = "='$places{$p}'"
 	}
 	push @{$self->where}, 'place '.$p;
-#	my@where = @{ $self->where };
-
-#	push @where,  'place '.$p;
-#	$self->where(\@where);
 	$self
 }
 sub dow {
 	my$self = shift;
-	my$place = toStr( shift );
-	my@where = @{ $self->where };
-	push @where,  'EXTRACT(dow FROM showtime) '.$place;
-	$self->where(\@where);
+	my$days = to_str( shift );
+	push @{ $self->where },  'EXTRACT(dow FROM showtime) '.$days;
 	$self
 }
 
-sub getShows {
+sub get_shows {
 	my$self = shift;
 	my$keep = shift;
 	my$s = 'SELECT url,showtime,title,place,img,description FROM shows NATURAL JOIN dates';
@@ -71,7 +66,7 @@ sub getShows {
 	my$res = $dbh->selectall_arrayref($s);#, ['showtime']);
 }
 
-sub save {
+sub save_shows {
 	my$self = shift;
 	my$what = shift;
 	my@shows = @{ shift() };
@@ -85,7 +80,7 @@ sub save {
 
 		if (defined $s{desc}) {
 			utf8::encode( $s{desc} );                   #chyba nie dziala
-			$s{desc} = substr($s{desc}, 0, 600);
+			$s{desc} = substr $s{desc}, 0, DESC_LEN;
 		}
 		utf8::encode( $s{title} );
 
@@ -104,5 +99,50 @@ sub save {
 					$s{date});
 	}
 	#print $r;
+	return;
 }
 __PACKAGE__->meta->make_immutable;
+1;
+
+=encoding utf8
+
+=head1 NAME
+Model
+
+=head1 NAME
+moduł erato komunikujący się z bazą
+
+=head2 METHODS
+
+=over 12
+
+=item C<to_str>
+formatuje argument do postaci wymaganej przez klauzulę WHERE
+do self->where dodaje "=$_" albo "IN($_->[0], ...)" jesli $_ jest arefem
+
+=item C<place>
+formatuje argument do postaci wymaganej przez klauzulę WHERE
+podmienia klucz identyfikujący teatr z właściwym stringiem obecnym w bazie, np 'slowacki_duza' => 'Słowacki - Duża Scena'
+do self->where dodaje "=$_" albo "IN($_->[0], ...)" jesli $_ jest arefem
+
+=item C<dow>
+do self->where dodaje warunek sprawdzajacy spektakle odbywaja sie w dniach podanych w $_ albo @$_ jako liczby 0..6 gdzie 0 to niedziela
+np $model->dow([1,2,3]) jesli interesuje nas pon, wt, sr
+
+=item C<get_shows>
+wrzuca dane z self->where do zapytania sql i zwraca wynik w postaci array_ref
+czysci self->shows jesli jako argument dostaje true
+
+=item C<save_shows>
+oczekuje danych w postaci stringa z kluczem nazwy teatru (np slowacki_duza) oraz listy hrefow z kluczami:
+keys = (url, date, title, img, desc)
+argumenty sa pozycyjne
+zapisuje do bazy danych (tabele shows i dates) przedstawienia i ich daty
+wrzuca tylko pierwsze wystapienie przedstawienia (dla ograniczenia warningow - i tak jest unique constraint)
+
+=back
+
+=head1 AUTHOR
+dj-jb@o2.pl
+
+=cut

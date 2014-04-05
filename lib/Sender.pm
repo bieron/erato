@@ -20,7 +20,7 @@ sub add {
 	my$self=shift;
 	$self->shows( [ @{$self->shows}, @{shift()} ] );
 }
-sub send {
+sub send_mail {
 	my$self=shift;
 	my$mails = join ',',@{$self->recipients};
 	print STDERR "sending to $mails";
@@ -28,15 +28,12 @@ sub send {
 	local$\="\n";
 	print EM $self->message;
 	close EM;
-	my$cmd = "lib/apollo.sh $fn $mails";# jasiu\@lazy.if.uj.edu.pl:erato";
-	print STDERR $cmd;
+	my$cmd = "lib/apollo.sh $fn $mails";
+#	print STDERR $cmd;
 	`$cmd`;
-#	$cmd = "ssh jasiu\@lazy.if.uj.edu.pl 'cd erato; ./send.sh $fn $mails'";
-#	print $cmd;
-#	`$cmd`;
-
 	return;
-
+}
+=begin
 	for my$mail (@{$self->recipients}) {
 		print STDERR "sending to $mail";
 #open EM, '| /usr/bin/sendmail -t';
@@ -49,26 +46,23 @@ sub send {
 #		print EM 'Content-type: text/html';
 		print EM $self->message;
 		close EM;
-		my$cmd = "scp $fn jasiu\@lazy.if.uj.edu.pl:erato";
 		print $cmd;
 		`$cmd`;
-		$cmd = "ssh jasiu\@lazy.if.uj.edu.pl 'cd erato; ./send.sh $fn'";
 		print $cmd;
 		`$cmd`;
 	}
-
-}
+=cut
 sub thead { return '<tr><th colspan="3">'.shift.'</th></tr>'}
 sub abs_path {
 	my($place, $url) = @_;
 	if ($url =~ m@^/@) {
 		$place =~ s/ .+//;
 		my%base = (
-			Opera => 'http://opera.krakow.pl',
+			Opera			=> 'http://opera.krakow.pl',
 			Filharmonia => 'http://filharmonia.krakow.pl',
-			'Słowacki' => 'http://slowacki.krakow.pl',
-			Bagatela => 'http://bagatela.pl',
-			Stary => 'http://stary.pl'
+			'Słowacki'	=> 'http://slowacki.krakow.pl',
+			Bagatela 	=> 'http://bagatela.pl',
+			Stary 		=> 'http://stary.pl'
 		);
 		$url = $base{$place} . $url;
 	}
@@ -81,7 +75,7 @@ sub format_times {
 		my($y,$m,$d) = split /-/, $_;
 		no warnings; #$d is a string => $d+0
 		my$time = timegm(0,0,0,$d+0, $m-1, $y-1900);
-		my$dw = $dow[ (localtime($time))[6]-1 ];
+		my$dw = $dow[ (localtime $time)[6]-1 ];
 		s/.+-(\d\d) (\d\d:\d\d).+/$1 $dw $2/;
 		$_;
 	} @a);
@@ -104,7 +98,7 @@ sub trow {
 
 	return "<tr style='background:$bg'><td width='170px'>$img</td><td style='padding:5px;width:500px'><a href='$url'>$title</a>$desc</td><td style='text-align:center;padding:10px'>$times</td></tr>";
 }
-sub write {
+sub write_mail {
 	my$self=shift;
 	my@seq = map {$Model::places{$_} } @_;
 	my($header, $footer) = do{local$/="\n\n"; <DATA>};
@@ -138,6 +132,52 @@ sub write {
 }
 __PACKAGE__->meta->make_immutable;
 1;
+
+=head1 NAME
+Sender
+
+=head1 DESCRIPTION
+moduł erato wysylajacy newsletter
+
+=head2 METHODS
+
+=over 12
+
+=item C<add>
+dodaje do $self->shows hrefy przedstawien podane jako arg
+
+=item C<send_mail>
+wysyla $self->message o tytule $self->title do $self->recipients jako BCC
+
+=item C<thead>
+zwraca string z naglowkiem tablicy teatru
+
+=item C<abs_path>
+2 pozycyjne arg: $place i $url
+jesli arg zaczyna sie od /, prefixuje go baseurlem dla strony $place
+
+=item C<format_times>
+zwraca dla defaultowego sql'owego datetime 'DD DOW HH:MM'
+
+=item C<trow>
+wywolywany z write mail
+przyjmuje trzy argumenty:
+$odd - true or false, decyduje o naprzemiennym tle <tr>
+$place - string nazwy placowki, np 'Słowacki - Duża Scena'
+@show - ([terminy], url, tytul, img[src], opis) - img i opis nie sa obowiazkowe
+zwraca string - pojedynczy <tr> ze spektaklem
+
+=item C<write_mail>
+tworzy html string i zapisuje go do pliku $fn oraz $self->message
+wywoluje thead i trow
+
+=back
+
+=head1 AUTHOR
+dj-jb@o2.pl
+
+=cut
+
 __DATA__
 <html><head>
 <meta http-equiv="content-type" content="text/html; charset=utf-8" />

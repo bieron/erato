@@ -46,9 +46,15 @@ sub place {
 }
 sub dow {
 	my$self = shift;
-	my$days = to_str( shift );
-	push @{ $self->where },  'EXTRACT(dow FROM showtime) '.$days;
+#	my$days = to_str( shift );
+	push @{ $self->where },  'EXTRACT(dow FROM showtime) '.to_str(@_);
 	$self
+}
+sub month {
+	my$self = shift;
+	my$month = @_ ? @_ : $Crawler::$month;
+	push @{ $self->where }, 'EXTRACT(month FROM showtime) '.to_str($month);
+	$self;
 }
 
 sub get_shows {
@@ -126,8 +132,11 @@ podmienia klucz identyfikujący teatr z właściwym stringiem obecnym w bazie, n
 do self->where dodaje "=$_" albo "IN($_->[0], ...)" jesli $_ jest arefem
 
 =item C<dow>
-do self->where dodaje warunek sprawdzajacy spektakle odbywaja sie w dniach podanych w $_ albo @$_ jako liczby 0..6 gdzie 0 to niedziela
+do self->where dodaje warunek przepuszczajacy spektakle odbywajace sie w dniach podanych w $_ albo @$_ jako liczby 0..6 gdzie 0 to niedziela
 np $model->dow([1,2,3]) jesli interesuje nas pon, wt, sr
+
+=item C<month>
+do self->where dodaje warunek miesiecy w ktorym wystepuje spektakl. Bez podanego argumentu bierze domyslny miesiac z $Crawler::month
 
 =item C<get_shows>
 wrzuca dane z self->where do zapytania sql i zwraca wynik w postaci array_ref

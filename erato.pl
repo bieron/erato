@@ -25,15 +25,15 @@ sub fetchAll {
 }
 
 sub mailRegular {
-	my$aref = $m->place('filharmonia')->dow(5)->get_shows;			#filharmonia w piatki
+	my$aref = $m->place('filharmonia')->dow(5)->month()->get_shows;			#filharmonia w piatki
 	$s->add($aref);
-	$aref = $m->place(['bagatela-sarego','bagatela-karmelicka'])->dow([2,4,6])->get_shows;			#bagatela w srodki piatki niedziele
+	$aref = $m->place([qw/bagatela-sarego bagatela-karmelicka/])->dow([2,4,6])->month()->get_shows;			#bagatela w srodki piatki niedziele
 	$s->add($aref);
-	$aref = $m->place('stary_duza')->dow([2,4,6])->get_shows;		#stary duza w srodki piatki niedziele
+	$aref = $m->place('stary_duza')->dow([2,4,6])->month()->get_shows;		#stary duza w srodki piatki niedziele
 	$s->add($aref);
-	$aref = $m->place('stary_mala')->dow([1,3,5])->get_shows;		#stary kameralna w wtorki czwartki soboty
+	$aref = $m->place('stary_mala')->dow([1,3,5])->month()->get_shows;		#stary kameralna w wtorki czwartki soboty
 	$s->add($aref);
-	$aref = $m->place(['slowacki_duza', 'slowacki_mala', 'opera'])->get_shows;	#reszta we wszystkie dni
+	$aref = $m->place([qw/slowacki_duza slowacki_mala opera/])->month()->get_shows;	#reszta we wszystkie dni
 	$s->add($aref);
 	$s->write_mail(qw/bagatela-karmelicka bagatela-sarego stary_duza stary_mala slowacki_duza slowacki_mala opera filharmonia/);
 #	return;
